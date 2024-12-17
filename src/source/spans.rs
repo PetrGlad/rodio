@@ -1,4 +1,6 @@
+use std::ops::Deref;
 use crate::{Sample, Source};
+use std::sync::mpsc;
 use std::time::Duration;
 
 pub trait Pluggable<S: Sample>: Source<Item = S>
@@ -12,6 +14,7 @@ pub struct Spans<S> {
     input: Option<Box<dyn Source<Item = S>>>,
     init: Box<dyn Fn() -> Box<dyn Pluggable<S>>>,
     wrapped: Option<Box<dyn Pluggable<S>>>,
+    source_trigger: mpsc::Receiver<Box<dyn Source<Item = S>>>,
 }
 
 impl<S: Sample + 'static> Spans<S> {
@@ -19,21 +22,25 @@ impl<S: Sample + 'static> Spans<S> {
         input: Box<dyn Source<Item = S>>,
         init: Box<dyn Fn() -> Box<dyn Pluggable<S>>>,
     ) -> Self {
+        let (tx, rx) = mpsc::channel::<Box<dyn Source<Item = S>>>();
         let mut result = Spans {
             input: None,
             init,
             wrapped: None,
+            source_trigger: rx,
         };
         let span_len = result.input.as_ref().unwrap().current_frame_len();
-
-        let mut core = (result.init)();
+        let mut core = result.init.deref()();
         core.connect(Box::new(SpanSource {
             count: span_len,
             source: Some(input),
-            handle_end: Some(move |source| result.input = Some(source)),
+            handle_end: Some(move |source| {
+                tx.send(source)
+                    .expect("source can be returned after span is exhausted")
+            }),
         }));
         result.wrapped = Some(core);
-        todo!();
+        todo!("after receiving source back, make and attach a new span processor");
         result
     }
 }
