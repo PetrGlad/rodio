@@ -81,6 +81,8 @@ mod zero;
 
 #[cfg(feature = "noise")]
 mod noise;
+mod spans;
+
 #[cfg(feature = "noise")]
 pub use self::noise::{pink, white, PinkNoise, WhiteNoise};
 
