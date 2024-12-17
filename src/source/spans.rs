@@ -1,4 +1,4 @@
-use crate::{Sample, Sink, Source};
+use crate::{Sample, Source};
 use std::time::Duration;
 
 pub trait Pluggable<S: Sample>: Source<Item = S>
@@ -14,44 +14,50 @@ pub struct Spans<S> {
     wrapped: Option<Box<dyn Pluggable<S>>>,
 }
 
-impl<S: Sample + Sized> Spans<S> {
+impl<S: Sample + 'static> Spans<S> {
     pub fn new(
         input: Box<dyn Source<Item = S>>,
         init: Box<dyn Fn() -> Box<dyn Pluggable<S>>>,
     ) -> Self {
-        let mut result = Spans {input: Some(input), init, wrapped: None};
-        // FIXME handle edge cases (frame_len == None)
-        let span_len = result.input.unwrap().current_frame_len().unwrap();
+        let mut result = Spans {
+            input: None,
+            init,
+            wrapped: None,
+        };
+        let span_len = result.input.as_ref().unwrap().current_frame_len();
+
         let mut core = (result.init)();
         core.connect(Box::new(SpanSource {
             count: span_len,
-            source: result.input.take(),
-            handle_end: Some(|source| {
-                result.input = Some(source)
-            }),
+            source: Some(input),
+            handle_end: Some(move |source| result.input = Some(source)),
         }));
+        result.wrapped = Some(core);
         todo!();
         result
     }
 }
 
+// See TestSource for a reference implementation
 struct SpanSource<S, Cb>
 where
+    S: Sample + 'static,
     Cb: FnOnce(Box<dyn Source<Item = S>>),
 {
-    count: usize,
+    count: Option<usize>,
     source: Option<Box<dyn Source<Item = S>>>,
     handle_end: Option<Cb>,
 }
 
 impl<S, Cb> SpanSource<S, Cb>
 where
+    S: Sample,
     Cb: FnOnce(Box<dyn Source<Item = S>>),
 {
     fn return_source(&mut self) {
         let cb = self.handle_end.take();
         if let Some(cb) = cb {
-            cb(self.source.take().expect("callback is called only once"));
+            cb(self.source.take().expect("source is handed back only once"));
         }
     }
 }
@@ -79,6 +85,7 @@ where
 
 impl<S, Cb> Iterator for SpanSource<S, Cb>
 where
+    S: Sample,
     Cb: FnOnce(Box<dyn Source<Item = S>>),
 {
     type Item = S;
@@ -88,9 +95,11 @@ where
             return None;
         }
         if let Some(sample) = self.source.as_deref_mut().unwrap().next() {
-            self.count -= 1;
-            if self.count == 0 {
-                self.return_source();
+            if let Some(count) = self.count.as_mut() {
+                *count -= 1;
+                if *count == 0 {
+                    self.return_source();
+                }
             }
             Some(sample)
         } else {
