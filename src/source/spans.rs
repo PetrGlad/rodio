@@ -37,6 +37,7 @@ impl<S: Sample + 'static> Spans<S> {
             handle_end: Some(move |source| {
                 tx.send(source)
                     .expect("source can be returned after span is exhausted")
+                // Should have been something like result.input.replace(source);
             }),
         }));
         result.wrapped = Some(core);
