@@ -172,11 +172,9 @@ impl OutputStreamBuilder {
             .or_else(|original_err| {
                 let mut devices = match cpal::default_host().output_devices() {
                     Ok(devices) => devices,
-                    Err(err) => {
+                    Err(_err) => {
                         #[cfg(feature = "tracing")]
-                        tracing::error!("error getting list of output devices: {err}");
-                        #[cfg(not(feature = "tracing"))]
-                        eprintln!("error getting list of output devices: {err}");
+                        tracing::error!("Error getting list of output devices: {_err}");
                         return Err(original_err);
                     }
                 };
@@ -325,8 +323,6 @@ impl OutputStream {
         let error_callback = |err| {
             #[cfg(feature = "tracing")]
             tracing::error!("error initializing output stream: {err}");
-            #[cfg(not(feature = "tracing"))]
-            eprintln!("error initializing output stream: {err}");
         };
         let sample_format = config.sample_format;
         let config = config.into();

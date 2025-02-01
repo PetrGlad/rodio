@@ -96,8 +96,6 @@ where
                     } else {
                         #[cfg(feature = "tracing")]
                         tracing::error!("Unsupported WAV float bit depth: {}", bits);
-                        #[cfg(not(feature = "tracing"))]
-                        eprintln!("Unsupported WAV float bit depth: {}", bits);
                         None
                     }
                 }
@@ -135,8 +133,6 @@ where
                     } else {
                         #[cfg(feature = "tracing")]
                         tracing::error!("Unsupported WAV integer bit depth: {}", bits);
-                        #[cfg(not(feature = "tracing"))]
-                        eprintln!("Unsupported WAV integer bit depth: {}", bits);
                         None
                     }
                 }
